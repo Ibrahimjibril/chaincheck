@@ -19,6 +19,21 @@ const NATIVE_SYMBOL_CHAIN: Record<string, string> = {
   MATIC: "polygon",
 };
 
+const WRAPPED_NATIVE_ADDRESS: Record<string, string> = {
+  ethereum: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  bnb: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+  polygon: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+  avalanche: "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c",
+  arbitrum: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+  base: "0x4200000000000000000000000000000000000006",
+  optimism: "0x4200000000000000000000000000000000000006",
+  solana: "So11111111111111111111111111111111111111112",
+};
+
+function isNativeSentinel(address: string): boolean {
+  return /^0xe{6,}$/i.test(address.toLowerCase().replace(/^0x0*/, "0x"));
+}
+
 export async function resolveToken(
   symbolOrAddress: string,
   preferredChain: string | null
@@ -69,21 +84,27 @@ export async function resolveToken(
       (!chainHint || t.chain === chainHint)
   );
   if (exactOnChain) {
-    return {
-      symbol: exactOnChain.symbol,
-      name: exactOnChain.name,
-      address: exactOnChain.address,
-      chain: exactOnChain.chain,
-    };
+    return finalizeResolved(
+      exactOnChain.symbol,
+      exactOnChain.name,
+      exactOnChain.address,
+      exactOnChain.chain
+    );
   }
 
   const exactAnyChain = tokens.find((t) => t.symbol?.toUpperCase() === upper);
   const best = exactAnyChain || tokens[0];
 
-  return {
-    symbol: best.symbol,
-    name: best.name,
-    address: best.address,
-    chain: best.chain,
-  };
+  return finalizeResolved(best.symbol, best.name, best.address, best.chain);
+}
+
+function finalizeResolved(
+  symbol: string,
+  name: string,
+  address: string,
+  chain: string
+): ResolvedToken {
+  const wrapped = WRAPPED_NATIVE_ADDRESS[chain];
+  const finalAddress = wrapped && isNativeSentinel(address) ? wrapped : address;
+  return { symbol, name, address: finalAddress, chain };
 }
