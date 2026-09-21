@@ -35,6 +35,7 @@ function isNativeSentinel(address: string): boolean {
 
 const SYMBOL_SEARCH_OVERRIDE: Record<string, { query: string; chain: string }> = {
   BTC: { query: "WBTC", chain: "ethereum" },
+  ETH: { query: "WETH", chain: "ethereum" },
 };
 
 export async function resolveToken(
@@ -113,6 +114,9 @@ function finalizeResolved(
   chain: string
 ): ResolvedToken {
   const wrapped = WRAPPED_NATIVE_ADDRESS[chain];
-  const finalAddress = wrapped && isNativeSentinel(address) ? wrapped : address;
+  let finalAddress = wrapped && isNativeSentinel(address) ? wrapped : address;
+  if (chain !== "solana" && finalAddress.startsWith("0x")) {
+    finalAddress = finalAddress.toLowerCase();
+  }
   return { symbol, name, address: finalAddress, chain };
 }
