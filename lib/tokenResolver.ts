@@ -1,3 +1,4 @@
+// lib/tokenResolver.ts
 import { NansenApiError } from "./nansen";
 
 export type ResolvedToken = {
@@ -32,6 +33,10 @@ function isNativeSentinel(address: string): boolean {
   return /^0xe{6,}$/i.test(address.toLowerCase().replace(/^0x0*/, "0x"));
 }
 
+const SYMBOL_SEARCH_OVERRIDE: Record<string, { query: string; chain: string }> = {
+  BTC: { query: "WBTC", chain: "ethereum" },
+};
+
 export async function resolveToken(
   symbolOrAddress: string,
   preferredChain: string | null
@@ -46,12 +51,17 @@ export async function resolveToken(
     );
   }
 
+  const override = SYMBOL_SEARCH_OVERRIDE[upper];
+  const searchQuery = override ? override.query : symbolOrAddress;
+  const searchUpper = override ? override.query.toUpperCase() : upper;
+
   const body: Record<string, unknown> = {
-    search_query: symbolOrAddress,
+    search_query: searchQuery,
     result_type: "token",
     limit: 10,
   };
-  const chainHint = preferredChain || NATIVE_SYMBOL_CHAIN[upper] || null;
+  const chainHint =
+    override?.chain || preferredChain || NATIVE_SYMBOL_CHAIN[upper] || null;
   if (chainHint) body.chain = chainHint;
 
   const res = await fetch(`${NANSEN_BASE_URL}/api/v1/search/general`, {
@@ -78,7 +88,7 @@ export async function resolveToken(
 
   const exactOnChain = tokens.find(
     (t) =>
-      t.symbol?.toUpperCase() === upper &&
+      t.symbol?.toUpperCase() === searchUpper &&
       (!chainHint || t.chain === chainHint)
   );
   if (exactOnChain) {
@@ -90,7 +100,7 @@ export async function resolveToken(
     );
   }
 
-  const exactAnyChain = tokens.find((t) => t.symbol?.toUpperCase() === upper);
+  const exactAnyChain = tokens.find((t) => t.symbol?.toUpperCase() === searchUpper);
   const best = exactAnyChain || tokens[0];
 
   return finalizeResolved(best.symbol, best.name, best.address, best.chain);
