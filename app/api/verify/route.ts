@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
 
   const parsed = parseClaim(claim);
 
-  // No fabricated verdict if we can't even parse the claim.
   if (parsed.claimType === "UNKNOWN" || !parsed.token) {
     const result = buildVerification({
       claimRaw: claim,
@@ -40,11 +39,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Step 1: resolve the symbol the user typed (e.g. "WIF") into a real
-    // on-chain contract address + chain. This is the fix for the bug
-    // where a bare ticker was sent straight to the flow endpoint and
-    // rejected as an invalid address.
     const resolved = await resolveToken(parsed.token, parsed.chain);
+    console.log("[verify] parsed:", parsed, "resolved:", resolved);
 
     if (!resolved) {
       const result = buildVerification({
@@ -58,11 +54,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(result);
     }
 
-    // Step 2: query real Smart Money flow data for the resolved token.
     const records = await getSmartMoneyNetflow({
       chain: resolved.chain,
       tokenAddress: resolved.address,
     });
+    console.log(
+      "[verify] netflow records count:",
+      records.length,
+      "sample:",
+      records[0]
+    );
 
     const match =
       records.find(
@@ -80,8 +81,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof NansenApiError) {
-      // Rate limit / insufficient credits / bad key -> surface clearly,
-      // never silently invent data.
       return NextResponse.json(
         {
           error: err.code || "nansen_error",
