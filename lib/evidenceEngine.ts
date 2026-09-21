@@ -1,7 +1,4 @@
 // lib/evidenceEngine.ts
-// Deterministic rules only. No AI is used to reach the verdict, so every
-// result is directly traceable back to real Nansen numbers.
-
 import { SmartMoneyNetflowRecord } from "./nansen";
 import { ClaimType } from "./claimParser";
 
@@ -28,9 +25,12 @@ export type VerificationResult = {
   token: string | null;
   chain: string | null;
   verdict: Verdict;
-  confidence: number; // 0-100, evidence completeness/quality, NOT "truth probability"
+  confidence: number;
   evidence: EvidenceItem[];
   explanation: string;
+  supportingSignals: number;
+  contradictingSignals: number;
+  checkedAt: string;
 };
 
 function fmtUsd(n: number): string {
@@ -64,13 +64,15 @@ export function buildVerification(opts: {
       verdict: "INSUFFICIENT_EVIDENCE",
       confidence: 0,
       evidence: [],
+      supportingSignals: 0,
+      contradictingSignals: 0,
+      checkedAt: new Date().toISOString(),
       explanation: `CHAINCHECK could not find a token matching "${token}"${
         chain ? ` on ${chain}` : ""
       } in Nansen's token index. Double-check the symbol, or try including the chain name (e.g. "on Solana").`,
     };
   }
 
-  // --- No usable claim type or token: refuse to fabricate a verdict ---
   if (claimType === "UNKNOWN" || !token) {
     return {
       claim: claimRaw,
@@ -79,12 +81,14 @@ export function buildVerification(opts: {
       verdict: "INSUFFICIENT_EVIDENCE",
       confidence: 0,
       evidence: [],
+      supportingSignals: 0,
+      contradictingSignals: 0,
+      checkedAt: new Date().toISOString(),
       explanation:
         "CHAINCHECK could not identify a clear accumulation/distribution claim and a token symbol in this sentence. Try a format like: \"Smart Money is buying SOL\" or \"Whales are selling PEPE\".",
     };
   }
 
-  // --- No matching record returned by Nansen: refuse to fabricate ---
   if (!record) {
     return {
       claim: claimRaw,
@@ -93,6 +97,9 @@ export function buildVerification(opts: {
       verdict: "INSUFFICIENT_EVIDENCE",
       confidence: 10,
       evidence: [],
+      supportingSignals: 0,
+      contradictingSignals: 0,
+      checkedAt: new Date().toISOString(),
       explanation: `Nansen returned no Smart Money flow data for "${token}"${
         chain ? ` on ${chain}` : ""
       }. This can mean the token symbol wasn't recognized, or Smart Money wallets show no recent activity on it.`,
@@ -171,9 +178,6 @@ export function buildVerification(opts: {
     });
   }
 
-  // --- Verdict logic ---
-  // Claim is "ACCUMULATION" -> we expect POSITIVE flows.
-  // Claim is "DISTRIBUTION" -> we expect NEGATIVE flows.
   const flows = [
     { period: "24H", dir: flow24 },
     { period: "7D", dir: flow7 },
@@ -189,7 +193,6 @@ export function buildVerification(opts: {
   const contradictingCount = flows.filter((f) => f.dir === oppositeDirection).length;
   const neutralCount = flows.filter((f) => f.dir === "NEUTRAL").length;
 
-  // Weight the 7D signal most heavily since it's the most commonly cited window.
   const primarySupports = flows[1].dir === wantDirection;
   const primaryContradicts = flows[1].dir === oppositeDirection;
 
@@ -208,7 +211,6 @@ export function buildVerification(opts: {
     verdict = "CONTRADICTED";
   }
 
-  // --- Confidence: data completeness + signal agreement, capped 5-95 ---
   const completeness = evidence.filter((e) => e.rawValue !== null).length / evidence.length;
   const agreement =
     flows.length > 0
@@ -247,5 +249,8 @@ export function buildVerification(opts: {
     confidence,
     evidence,
     explanation,
+    supportingSignals: supportingCount,
+    contradictingSignals: contradictingCount,
+    checkedAt: new Date().toISOString(),
   };
 }

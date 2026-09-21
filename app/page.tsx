@@ -25,11 +25,14 @@ type VerificationResult = {
   confidence: number;
   evidence: EvidenceItem[];
   explanation: string;
+  supportingSignals: number;
+  contradictingSignals: number;
+  checkedAt: string;
 };
 
 const EXAMPLE_CLAIMS = [
   "Smart Money is buying SOL",
-  "Whales are accumulating ETH",
+  "Smart Money is buying BTC",
   "Smart Money is selling PEPE",
   "Large holders are distributing WIF on solana",
 ];
@@ -84,12 +87,46 @@ function DirectionBadge({ direction }: { direction: EvidenceItem["direction"] })
   return <span className={`${m.cls} font-mono`}>{m.icon}</span>;
 }
 
+function Row({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-2">
+      <span className="text-gray-500">{label}</span>
+      <span className={`text-right ${valueClassName || "text-white"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function buildShareText(result: VerificationResult): string {
+  const verdictLabel = VERDICT_STYLES[result.verdict].label;
+  return [
+    `CHAINCHECK verified an onchain claim:`,
+    `"${result.claim}"`,
+    ``,
+    `Verdict: ${verdictLabel}`,
+    `Evidence confidence: ${result.confidence}%`,
+    `Signals: ${result.supportingSignals} supporting, ${result.contradictingSignals} contradicting`,
+    ``,
+    `Powered by real @nansen_ai data \u2014 built for the Nansen Meridian Buildathon.`,
+  ].join("\n");
+}
+
 export default function Home() {
   const [claim, setClaim] = useState("");
   const [loading, setLoading] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showReceipt, setShowReceipt] = useState(false);
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function handleVerify(claimText?: string) {
@@ -100,6 +137,7 @@ export default function Home() {
     setResult(null);
     setError(null);
     setStepIndex(0);
+    setShowReceipt(false);
 
     stepTimer.current = setInterval(() => {
       setStepIndex((i) => (i < LOADING_STEPS.length - 1 ? i + 1 : i));
@@ -203,6 +241,7 @@ export default function Home() {
         )}
 
         {result && !loading && (
+          <>
           <section className="fade-up mt-8 space-y-6">
             <div className="rounded-2xl border border-border bg-panel/60 p-6">
               <div className="text-xs font-mono uppercase tracking-wider text-gray-500">
@@ -264,7 +303,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Simple evidence flow: claim -> evidence -> verdict */}
             <div className="rounded-2xl border border-border bg-panel/60 p-6">
               <div className="mb-4 text-xs font-mono uppercase tracking-wider text-gray-500">
                 Evidence Map
@@ -305,6 +343,74 @@ export default function Home() {
               </div>
             </div>
           </section>
+
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setShowReceipt((v) => !v)}
+              className="rounded-xl border border-accent/40 bg-accent/10 px-5 py-3 text-sm font-semibold text-accent transition hover:bg-accent/20"
+            >
+              {showReceipt ? "HIDE EVIDENCE RECEIPT" : "GENERATE EVIDENCE RECEIPT"}
+            </button>
+          </div>
+
+          {showReceipt && (
+            <div className="fade-up rounded-2xl border border-accent/30 bg-black/40 p-6 font-mono text-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-accent font-bold tracking-widest">
+                  CHAINCHECK
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">
+                  Evidence Receipt
+                </div>
+              </div>
+
+              <div className="space-y-3 text-gray-300">
+                <Row label="Claim" value={`"${result.claim}"`} />
+                <Row label="Asset" value={result.token || "\u2014"} />
+                <Row label="Chain" value={result.chain || "\u2014"} />
+                <Row
+                  label="Verdict"
+                  value={VERDICT_STYLES[result.verdict].label}
+                  valueClassName={VERDICT_STYLES[result.verdict].color}
+                />
+                <Row
+                  label="Evidence confidence"
+                  value={`${result.confidence}% (data quality, not probability)`}
+                />
+                <Row
+                  label="Supporting signals"
+                  value={String(result.supportingSignals)}
+                />
+                <Row
+                  label="Contradicting signals"
+                  value={String(result.contradictingSignals)}
+                />
+                <Row label="Data source" value="Nansen" />
+                <Row
+                  label="Checked"
+                  value={new Date(result.checkedAt).toUTCString()}
+                />
+              </div>
+
+              <div className="mt-5 border-t border-border pt-4 text-xs leading-relaxed text-gray-400">
+                {result.explanation}
+              </div>
+
+              <button
+                onClick={() => {
+                  const text = buildShareText(result);
+                  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                    text
+                  )}`;
+                  window.open(url, "_blank", "noopener,noreferrer");
+                }}
+                className="mt-5 w-full rounded-xl bg-accent px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
+              >
+                SHARE ON X
+              </button>
+            </div>
+          )}
+          </>
         )}
 
         <footer className="mt-16 text-center text-xs text-gray-600">
