@@ -1,4 +1,3 @@
-// lib/tokenResolver.ts
 import { NansenApiError } from "./nansen";
 
 export type ResolvedToken = {
@@ -13,7 +12,6 @@ const NANSEN_BASE_URL = "https://api.nansen.ai";
 const NATIVE_SYMBOL_CHAIN: Record<string, string> = {
   SOL: "solana",
   ETH: "ethereum",
-  BTC: "bitcoin",
   BNB: "bnb",
   AVAX: "avalanche",
   MATIC: "polygon",

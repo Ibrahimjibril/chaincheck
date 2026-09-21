@@ -6,6 +6,28 @@ import { buildVerification } from "@/lib/evidenceEngine";
 
 export const runtime = "nodejs";
 
+const SUPPORTED_CHAINS = new Set([
+  "all",
+  "arbitrum",
+  "arc",
+  "avalanche",
+  "base",
+  "bnb",
+  "ethereum",
+  "hyperevm",
+  "iotaevm",
+  "linea",
+  "mantle",
+  "monad",
+  "optimism",
+  "plasma",
+  "polygon",
+  "robinhood",
+  "sei",
+  "solana",
+  "sonic",
+]);
+
 export async function POST(req: NextRequest) {
   let claim: string;
   try {
@@ -50,6 +72,18 @@ export async function POST(req: NextRequest) {
         chain: parsed.chain,
         record: null,
         tokenNotFound: true,
+      });
+      return NextResponse.json(result);
+    }
+
+    if (!SUPPORTED_CHAINS.has(resolved.chain)) {
+      const result = buildVerification({
+        claimRaw: claim,
+        claimType: parsed.claimType,
+        token: resolved.symbol,
+        chain: resolved.chain,
+        record: null,
+        chainUnsupported: true,
       });
       return NextResponse.json(result);
     }

@@ -108,13 +108,16 @@ function Row({
 
 function buildShareText(result: VerificationResult): string {
   const verdictLabel = VERDICT_STYLES[result.verdict].label;
+  const evidenceLines = result.evidence
+    .slice(0, 3)
+    .map((ev) => `\u2022 ${ev.metric} (${ev.period}): ${ev.value}`);
   return [
     `CHAINCHECK verified an onchain claim:`,
     `"${result.claim}"`,
     ``,
     `Verdict: ${verdictLabel}`,
     `Evidence confidence: ${result.confidence}%`,
-    `Signals: ${result.supportingSignals} supporting, ${result.contradictingSignals} contradicting`,
+    ...evidenceLines,
     ``,
     `Powered by real @nansen_ai data \u2014 built for the Nansen Meridian Buildathon.`,
   ].join("\n");
@@ -391,6 +394,25 @@ export default function Home() {
                   value={new Date(result.checkedAt).toUTCString()}
                 />
               </div>
+
+              {result.evidence.length > 0 && (
+                <div className="mt-5 space-y-2 border-t border-border pt-4">
+                  <div className="mb-2 text-[10px] uppercase tracking-wider text-gray-500">
+                    Evidence Detail
+                  </div>
+                  {result.evidence.map((ev, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-400">
+                        {ev.metric} ({ev.period})
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <DirectionBadge direction={ev.direction} />
+                        <span className="text-white">{ev.value}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-5 border-t border-border pt-4 text-xs leading-relaxed text-gray-400">
                 {result.explanation}

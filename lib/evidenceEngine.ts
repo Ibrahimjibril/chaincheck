@@ -1,4 +1,3 @@
-// lib/evidenceEngine.ts
 import { SmartMoneyNetflowRecord } from "./nansen";
 import { ClaimType } from "./claimParser";
 
@@ -53,8 +52,28 @@ export function buildVerification(opts: {
   chain: string | null;
   record: SmartMoneyNetflowRecord | null;
   tokenNotFound?: boolean;
+  chainUnsupported?: boolean;
 }): VerificationResult {
-  const { claimRaw, claimType, token, chain, record, tokenNotFound } = opts;
+  const { claimRaw, claimType, token, chain, record, tokenNotFound, chainUnsupported } = opts;
+
+  if (chainUnsupported) {
+    return {
+      claim: claimRaw,
+      token,
+      chain,
+      verdict: "INSUFFICIENT_EVIDENCE",
+      confidence: 0,
+      evidence: [],
+      supportingSignals: 0,
+      contradictingSignals: 0,
+      checkedAt: new Date().toISOString(),
+      explanation: `Nansen's Smart Money data source does not currently cover ${
+        chain ? chain.charAt(0).toUpperCase() + chain.slice(1) : "this chain"
+      }${
+        token ? ` (needed for ${token})` : ""
+      }. This is a genuine data-source limitation, not an error in CHAINCHECK's logic \u2014 try a token on Ethereum, Solana, Base, Arbitrum, or another supported chain instead.`,
+    };
+  }
 
   if (tokenNotFound) {
     return {
