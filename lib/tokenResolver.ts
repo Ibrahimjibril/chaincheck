@@ -16,6 +16,7 @@ const NATIVE_SYMBOL_CHAIN: Record<string, string> = {
   BNB: "bnb",
   AVAX: "avalanche",
   MATIC: "polygon",
+  MON: "monad",
 };
 
 const WRAPPED_NATIVE_ADDRESS: Record<string, string> = {
@@ -36,6 +37,7 @@ function isNativeSentinel(address: string): boolean {
 const SYMBOL_SEARCH_OVERRIDE: Record<string, { query: string; chain: string }> = {
   BTC: { query: "WBTC", chain: "ethereum" },
   ETH: { query: "WETH", chain: "ethereum" },
+  HYPE: { query: "HYPE", chain: "hyperevm" },
 };
 
 export async function resolveToken(

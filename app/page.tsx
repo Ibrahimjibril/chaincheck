@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 type EvidenceItem = {
   metric: string;
@@ -111,6 +111,10 @@ function buildShareText(result: VerificationResult): string {
   const evidenceLines = result.evidence
     .slice(0, 3)
     .map((ev) => `\u2022 ${ev.metric} (${ev.period}): ${ev.value}`);
+  const shareUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/?claim=${encodeURIComponent(result.claim)}`
+      : "";
   return [
     `CHAINCHECK verified an onchain claim:`,
     `"${result.claim}"`,
@@ -120,6 +124,8 @@ function buildShareText(result: VerificationResult): string {
     ...evidenceLines,
     ``,
     `Powered by real @nansen_ai data \u2014 built for the Nansen Meridian Buildathon.`,
+    ``,
+    `Check it yourself \u2192 ${shareUrl}`,
   ].join("\n");
 }
 
@@ -131,6 +137,16 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedClaim = params.get("claim");
+    if (sharedClaim) {
+      setClaim(sharedClaim);
+      handleVerify(sharedClaim);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleVerify(claimText?: string) {
     const text = (claimText ?? claim).trim();
