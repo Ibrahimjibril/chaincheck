@@ -1,4 +1,5 @@
-import { SmartMoneyNetflowRecord } from "./nansen";
+// lib/evidenceEngine.ts
+import { SmartMoneyNetflowRecord, SmartMoneyDexTrade } from "./nansen";
 import { ClaimType } from "./claimParser";
 
 export type SignalDirection = "POSITIVE" | "NEGATIVE" | "NEUTRAL" | "UNKNOWN";
@@ -19,6 +20,15 @@ export type Verdict =
   | "CONTRADICTED"
   | "INSUFFICIENT_EVIDENCE";
 
+export type ActiveTrader = {
+  address: string;
+  label: string;
+  chain: string;
+  valueUsd: number | null;
+  timestamp: string;
+  txHash: string;
+};
+
 export type VerificationResult = {
   claim: string;
   token: string | null;
@@ -30,6 +40,7 @@ export type VerificationResult = {
   supportingSignals: number;
   contradictingSignals: number;
   checkedAt: string;
+  activeTraders: ActiveTrader[];
 };
 
 function fmtUsd(n: number): string {
@@ -51,10 +62,11 @@ export function buildVerification(opts: {
   token: string | null;
   chain: string | null;
   record: SmartMoneyNetflowRecord | null;
+  trades?: SmartMoneyDexTrade[];
   tokenNotFound?: boolean;
   chainUnsupported?: boolean;
 }): VerificationResult {
-  const { claimRaw, claimType, token, chain, record, tokenNotFound, chainUnsupported } = opts;
+  const { claimRaw, claimType, token, chain, record, tokenNotFound, chainUnsupported, trades } = opts;
 
   if (chainUnsupported) {
     return {
@@ -67,6 +79,7 @@ export function buildVerification(opts: {
       supportingSignals: 0,
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
+      activeTraders: [],
       explanation: `Nansen's Smart Money data source does not currently cover ${
         chain ? chain.charAt(0).toUpperCase() + chain.slice(1) : "this chain"
       }${
@@ -86,6 +99,7 @@ export function buildVerification(opts: {
       supportingSignals: 0,
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
+      activeTraders: [],
       explanation: `CHAINCHECK could not find a token matching "${token}"${
         chain ? ` on ${chain}` : ""
       } in Nansen's token index. Double-check the symbol, or try including the chain name (e.g. "on Solana").`,
@@ -103,6 +117,7 @@ export function buildVerification(opts: {
       supportingSignals: 0,
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
+      activeTraders: [],
       explanation:
         "CHAINCHECK could not identify a clear accumulation/distribution claim and a token symbol in this sentence. Try a format like: \"Smart Money is buying SOL\" or \"Whales are selling PEPE\".",
     };
@@ -119,6 +134,7 @@ export function buildVerification(opts: {
       supportingSignals: 0,
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
+      activeTraders: [],
       explanation: `Nansen returned no Smart Money flow data for "${token}"${
         chain ? ` on ${chain}` : ""
       }. This can mean the token symbol wasn't recognized, or Smart Money wallets show no recent activity on it.`,
@@ -260,6 +276,25 @@ export function buildVerification(opts: {
       explanation = `There isn't enough reliable Nansen data for ${token} to confidently confirm or deny this claim.`;
   }
 
+  const traderMap = new Map<string, ActiveTrader>();
+  for (const t of trades || []) {
+    const existing = traderMap.get(t.trader_address);
+    const value = t.trade_value_usd ?? 0;
+    if (!existing || value > (existing.valueUsd ?? 0)) {
+      traderMap.set(t.trader_address, {
+        address: t.trader_address,
+        label: t.trader_address_label || "Smart Money",
+        chain: t.chain,
+        valueUsd: t.trade_value_usd,
+        timestamp: t.block_timestamp,
+        txHash: t.transaction_hash,
+      });
+    }
+  }
+  const activeTraders = Array.from(traderMap.values())
+    .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0))
+    .slice(0, 5);
+
   return {
     claim: claimRaw,
     token,
@@ -271,5 +306,6 @@ export function buildVerification(opts: {
     supportingSignals: supportingCount,
     contradictingSignals: contradictingCount,
     checkedAt: new Date().toISOString(),
+    activeTraders,
   };
 }

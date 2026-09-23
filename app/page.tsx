@@ -17,6 +17,15 @@ type Verdict =
   | "CONTRADICTED"
   | "INSUFFICIENT_EVIDENCE";
 
+type ActiveTrader = {
+  address: string;
+  label: string;
+  chain: string;
+  valueUsd: number | null;
+  timestamp: string;
+  txHash: string;
+};
+
 type VerificationResult = {
   claim: string;
   token: string | null;
@@ -28,7 +37,29 @@ type VerificationResult = {
   supportingSignals: number;
   contradictingSignals: number;
   checkedAt: string;
+  activeTraders: ActiveTrader[];
 };
+
+const EXPLORER_BASE: Record<string, string> = {
+  ethereum: "https://etherscan.io/address/",
+  base: "https://basescan.org/address/",
+  arbitrum: "https://arbiscan.io/address/",
+  polygon: "https://polygonscan.com/address/",
+  avalanche: "https://snowtrace.io/address/",
+  bnb: "https://bscscan.com/address/",
+  optimism: "https://optimistic.etherscan.io/address/",
+  solana: "https://solscan.io/account/",
+};
+
+function explorerUrl(chain: string, address: string): string | null {
+  const base = EXPLORER_BASE[chain];
+  return base ? `${base}${address}` : null;
+}
+
+function truncateAddress(addr: string): string {
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
 
 const EXAMPLE_CLAIMS = [
   "Smart Money is buying SOL",
@@ -361,6 +392,62 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            {result.activeTraders.length > 0 && (
+              <div className="rounded-2xl border border-border bg-panel/60 p-6">
+                <div className="mb-1 text-xs font-mono uppercase tracking-wider text-gray-500">
+                  Active Smart Money Wallets ({result.activeTraders.length})
+                </div>
+                <div className="mb-4 text-[11px] text-gray-600">
+                  Real wallet addresses from Nansen&apos;s DEX trade data —
+                  tap to verify on-chain yourself.
+                </div>
+                <div className="space-y-2">
+                  {result.activeTraders.map((t, i) => {
+                    const url = explorerUrl(t.chain, t.address);
+                    const row = (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-black/30 px-4 py-3">
+                        <div className="min-w-0">
+                          <div className="font-mono text-sm text-white">
+                            {truncateAddress(t.address)}
+                          </div>
+                          <div className="truncate text-[11px] text-gray-500">
+                            {t.label}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono text-sm text-accent">
+                            {t.valueUsd != null
+                              ? `$${t.valueUsd.toLocaleString(undefined, {
+                                  maximumFractionDigits: 0,
+                                })}`
+                              : "\u2014"}
+                          </div>
+                          {url && (
+                            <div className="text-[10px] text-gray-500">
+                              View on explorer →
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                    return url ? (
+                      <a
+                        key={i}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block transition hover:opacity-80"
+                      >
+                        {row}
+                      </a>
+                    ) : (
+                      <div key={i}>{row}</div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </section>
 
           <div className="flex flex-wrap gap-3">
@@ -425,6 +512,20 @@ export default function Home() {
                         <DirectionBadge direction={ev.direction} />
                         <span className="text-white">{ev.value}</span>
                       </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {result.activeTraders.length > 0 && (
+                <div className="mt-5 space-y-2 border-t border-border pt-4">
+                  <div className="mb-2 text-[10px] uppercase tracking-wider text-gray-500">
+                    Verified Wallets ({result.activeTraders.length})
+                  </div>
+                  {result.activeTraders.map((t, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-400">{t.label}</span>
+                      <span className="text-white">{truncateAddress(t.address)}</span>
                     </div>
                   ))}
                 </div>

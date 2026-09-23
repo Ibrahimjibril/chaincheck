@@ -35,10 +35,6 @@ export class NansenApiError extends Error {
   }
 }
 
-/**
- * Calls Nansen's Smart Money Netflow endpoint.
- * Docs: https://docs.nansen.ai/api/smart-money/netflows
- */
 export async function getSmartMoneyNetflow(params: {
   chain: string;
   tokenAddress: string;
@@ -52,10 +48,6 @@ export async function getSmartMoneyNetflow(params: {
     );
   }
 
-  // IMPORTANT: token_address must be a real resolved contract address
-  // (or a recognized native-asset symbol like "SOL"/"ETH"), never a bare
-  // ticker like "WIF" \u2014 Nansen validates the address format server-side.
-  // Resolution happens in lib/tokenResolver.ts before this is called.
   const body = {
     chains: [params.chain],
     filters: {
@@ -73,7 +65,6 @@ export async function getSmartMoneyNetflow(params: {
       apikey: apiKey,
     },
     body: JSON.stringify(body),
-    // Buildathon-friendly: do not cache live financial data
     cache: "no-store",
   });
 
@@ -91,5 +82,61 @@ export async function getSmartMoneyNetflow(params: {
   }
 
   const json = (await res.json()) as NetflowResponse;
+  return json.data || [];
+}
+
+export type SmartMoneyDexTrade = {
+  chain: string;
+  block_timestamp: string;
+  transaction_hash: string;
+  trader_address: string;
+  trader_address_label: string;
+  token_bought_symbol: string;
+  token_sold_symbol: string;
+  trade_value_usd: number | null;
+};
+
+type DexTradesResponse = {
+  data: SmartMoneyDexTrade[];
+  pagination: { page: number; per_page: number; is_last_page: boolean };
+};
+
+export async function getSmartMoneyDexTrades(params: {
+  chain: string;
+  tokenAddress: string;
+}): Promise<SmartMoneyDexTrade[]> {
+  const apiKey = process.env.NANSEN_API_KEY;
+  if (!apiKey) {
+    throw new NansenApiError(
+      "Missing NANSEN_API_KEY. Add it to your .env.local file.",
+      500,
+      "missing_api_key"
+    );
+  }
+
+  const body = {
+    chains: [params.chain],
+    filters: {
+      token_bought_address: [params.tokenAddress],
+    },
+    pagination: { page: 1, per_page: 8 },
+    order_by: [{ field: "trade_value_usd", direction: "DESC" }],
+  };
+
+  const res = await fetch(`${NANSEN_BASE_URL}/api/v1/smart-money/dex-trades`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: apiKey,
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    return [];
+  }
+
+  const json = (await res.json()) as DexTradesResponse;
   return json.data || [];
 }

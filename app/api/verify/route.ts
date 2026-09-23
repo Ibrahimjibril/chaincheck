@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseClaim } from "@/lib/claimParser";
-import { getSmartMoneyNetflow, NansenApiError } from "@/lib/nansen";
+import { getSmartMoneyNetflow, getSmartMoneyDexTrades, NansenApiError } from "@/lib/nansen";
 import { resolveToken } from "@/lib/tokenResolver";
 import { buildVerification } from "@/lib/evidenceEngine";
 
@@ -104,12 +104,23 @@ export async function POST(req: NextRequest) {
         (r) => r.token_symbol?.toUpperCase() === resolved.symbol.toUpperCase()
       ) || records[0] || null;
 
+    let trades: Awaited<ReturnType<typeof getSmartMoneyDexTrades>> = [];
+    try {
+      trades = await getSmartMoneyDexTrades({
+        chain: resolved.chain,
+        tokenAddress: resolved.address,
+      });
+    } catch (tradeErr) {
+      console.error("[verify] dex-trades fetch failed (non-fatal):", tradeErr);
+    }
+
     const result = buildVerification({
       claimRaw: claim,
       claimType: parsed.claimType,
       token: resolved.symbol,
       chain: resolved.chain,
       record: match,
+      trades,
     });
 
     return NextResponse.json(result);
