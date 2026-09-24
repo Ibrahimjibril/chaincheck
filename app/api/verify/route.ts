@@ -30,14 +30,35 @@ const SUPPORTED_CHAINS = new Set([
 
 export async function POST(req: NextRequest) {
   let claim: string;
+  let structuredToken: string | null = null;
+  let structuredChain: string | null = null;
+  let structuredClaimType: "ACCUMULATION" | "DISTRIBUTION" | null = null;
+
   try {
     const body = await req.json();
     claim = typeof body?.claim === "string" ? body.claim.trim() : "";
+
+    if (typeof body?.token === "string" && body.token.trim()) {
+      structuredToken = body.token.trim();
+    }
+    if (typeof body?.chain === "string" && body.chain.trim()) {
+      structuredChain = body.chain.trim();
+    }
+    if (body?.claimType === "ACCUMULATION" || body?.claimType === "DISTRIBUTION") {
+      structuredClaimType = body.claimType;
+    }
   } catch {
     return NextResponse.json(
       { error: "invalid_request", message: "Request body must be JSON with a 'claim' field." },
       { status: 400 }
     );
+  }
+
+  if (structuredToken && structuredClaimType) {
+    const verb = structuredClaimType === "ACCUMULATION" ? "buying" : "selling";
+    claim = `Smart Money is ${verb} ${structuredToken}${
+      structuredChain ? ` on ${structuredChain}` : ""
+    }`;
   }
 
   if (!claim) {
@@ -47,7 +68,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const parsed = parseClaim(claim);
+  const parsed = structuredToken && structuredClaimType
+    ? {
+        raw: claim,
+        claimType: structuredClaimType,
+        token: structuredToken,
+        chain: structuredChain,
+      }
+    : parseClaim(claim);
 
   if (parsed.claimType === "UNKNOWN" || !parsed.token) {
     const result = buildVerification({

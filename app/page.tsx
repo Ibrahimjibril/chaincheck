@@ -61,6 +61,27 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+const CHAIN_OPTIONS: { value: string; label: string }[] = [
+  { value: "ethereum", label: "Ethereum" },
+  { value: "solana", label: "Solana" },
+  { value: "base", label: "Base" },
+  { value: "arbitrum", label: "Arbitrum" },
+  { value: "bnb", label: "BNB Chain" },
+  { value: "polygon", label: "Polygon" },
+  { value: "avalanche", label: "Avalanche" },
+  { value: "optimism", label: "Optimism" },
+  { value: "linea", label: "Linea" },
+  { value: "mantle", label: "Mantle" },
+  { value: "monad", label: "Monad" },
+  { value: "robinhood", label: "Robinhood Chain" },
+  { value: "sei", label: "Sei" },
+  { value: "sonic", label: "Sonic" },
+  { value: "hyperevm", label: "HyperEVM" },
+  { value: "iotaevm", label: "IOTA EVM" },
+  { value: "plasma", label: "Plasma" },
+  { value: "arc", label: "Arc" },
+];
+
 const EXAMPLE_CLAIMS = [
   "Smart Money is buying SOL",
   "Smart Money is buying BTC",
@@ -167,6 +188,11 @@ export default function Home() {
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [selChain, setSelChain] = useState("ethereum");
+  const [selToken, setSelToken] = useState("");
+  const [selClaimType, setSelClaimType] = useState<"ACCUMULATION" | "DISTRIBUTION">(
+    "ACCUMULATION"
+  );
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -179,10 +205,9 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleVerify(claimText?: string) {
-    const text = (claimText ?? claim).trim();
-    if (!text) return;
-
+  async function runVerification(
+    payload: { claim: string } | { token: string; chain: string; claimType: "ACCUMULATION" | "DISTRIBUTION" }
+  ) {
     setLoading(true);
     setResult(null);
     setError(null);
@@ -197,13 +222,14 @@ export default function Home() {
       const res = await fetch("/api/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ claim: text }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.message || "Something went wrong.");
       } else {
         setResult(data);
+        if (typeof data.claim === "string") setClaim(data.claim);
       }
     } catch (e) {
       setError("Network error — could not reach CHAINCHECK's server.");
@@ -211,6 +237,18 @@ export default function Home() {
       if (stepTimer.current) clearInterval(stepTimer.current);
       setLoading(false);
     }
+  }
+
+  async function handleVerify(claimText?: string) {
+    const text = (claimText ?? claim).trim();
+    if (!text) return;
+    await runVerification({ claim: text });
+  }
+
+  async function handleStructuredVerify() {
+    const token = selToken.trim();
+    if (!token) return;
+    await runVerification({ token, chain: selChain, claimType: selClaimType });
   }
 
   return (
@@ -265,6 +303,63 @@ export default function Home() {
                 {ex}
               </button>
             ))}
+          </div>
+
+          <div className="mt-6 border-t border-border pt-5">
+            <div className="mb-3 text-xs font-mono uppercase tracking-wider text-gray-500">
+              Or search by Chain + Token
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-wider text-gray-600">
+                  Blockchain
+                </label>
+                <select
+                  value={selChain}
+                  onChange={(e) => setSelChain(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-black/40 px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                >
+                  {CHAIN_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-wider text-gray-600">
+                  Token
+                </label>
+                <input
+                  value={selToken}
+                  onChange={(e) => setSelToken(e.target.value)}
+                  placeholder="e.g. SOL, PEPE, WIF"
+                  className="w-full rounded-xl border border-border bg-black/40 px-3 py-2.5 text-sm outline-none placeholder:text-gray-600 focus:border-accent/60"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-wider text-gray-600">
+                  Investigate
+                </label>
+                <select
+                  value={selClaimType}
+                  onChange={(e) =>
+                    setSelClaimType(e.target.value as "ACCUMULATION" | "DISTRIBUTION")
+                  }
+                  className="w-full rounded-xl border border-border bg-black/40 px-3 py-2.5 text-sm outline-none focus:border-accent/60"
+                >
+                  <option value="ACCUMULATION">Smart Money Buying</option>
+                  <option value="DISTRIBUTION">Smart Money Selling</option>
+                </select>
+              </div>
+            </div>
+            <button
+              onClick={handleStructuredVerify}
+              disabled={loading || !selToken.trim()}
+              className="mt-3 w-full rounded-xl border border-accent/40 bg-accent/10 px-5 py-2.5 text-sm font-semibold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            >
+              VERIFY SELECTION
+            </button>
           </div>
         </section>
 
