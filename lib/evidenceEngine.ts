@@ -1,5 +1,8 @@
 // lib/evidenceEngine.ts
-import { SmartMoneyNetflowRecord, SmartMoneyDexTrade } from "./nansen";
+// Deterministic rules only. No AI is used to reach the verdict, so every
+// result is directly traceable back to real Nansen numbers.
+
+import { SmartMoneyNetflowRecord, SmartMoneyDexTrade, TGMWhoBoughtSold } from "./nansen";
 import { ClaimType } from "./claimParser";
 
 export type SignalDirection = "POSITIVE" | "NEGATIVE" | "NEUTRAL" | "UNKNOWN";
@@ -34,13 +37,15 @@ export type VerificationResult = {
   token: string | null;
   chain: string | null;
   verdict: Verdict;
-  confidence: number;
+  confidence: number; // 0-100, evidence completeness/quality, NOT "truth probability"
   evidence: EvidenceItem[];
   explanation: string;
   supportingSignals: number;
   contradictingSignals: number;
-  checkedAt: string;
+  checkedAt: string; // ISO timestamp, when this verification was run
   activeTraders: ActiveTrader[];
+  whaleTraders: ActiveTrader[];
+  totalTradeValueUsd: number;
 };
 
 function fmtUsd(n: number): string {
@@ -63,10 +68,11 @@ export function buildVerification(opts: {
   chain: string | null;
   record: SmartMoneyNetflowRecord | null;
   trades?: SmartMoneyDexTrade[];
+  whoBoughtSold?: TGMWhoBoughtSold[];
   tokenNotFound?: boolean;
   chainUnsupported?: boolean;
 }): VerificationResult {
-  const { claimRaw, claimType, token, chain, record, tokenNotFound, chainUnsupported, trades } = opts;
+  const { claimRaw, claimType, token, chain, record, tokenNotFound, chainUnsupported, trades, whoBoughtSold } = opts;
 
   if (chainUnsupported) {
     return {
@@ -80,6 +86,8 @@ export function buildVerification(opts: {
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
       activeTraders: [],
+      whaleTraders: [],
+      totalTradeValueUsd: 0,
       explanation: `Nansen's Smart Money data source does not currently cover ${
         chain ? chain.charAt(0).toUpperCase() + chain.slice(1) : "this chain"
       }${
@@ -100,6 +108,8 @@ export function buildVerification(opts: {
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
       activeTraders: [],
+      whaleTraders: [],
+      totalTradeValueUsd: 0,
       explanation: `CHAINCHECK could not find a token matching "${token}"${
         chain ? ` on ${chain}` : ""
       } in Nansen's token index. Double-check the symbol, or try including the chain name (e.g. "on Solana").`,
@@ -118,6 +128,8 @@ export function buildVerification(opts: {
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
       activeTraders: [],
+      whaleTraders: [],
+      totalTradeValueUsd: 0,
       explanation:
         "CHAINCHECK could not identify a clear accumulation/distribution claim and a token symbol in this sentence. Try a format like: \"Smart Money is buying SOL\" or \"Whales are selling PEPE\".",
     };
@@ -135,6 +147,8 @@ export function buildVerification(opts: {
       contradictingSignals: 0,
       checkedAt: new Date().toISOString(),
       activeTraders: [],
+      whaleTraders: [],
+      totalTradeValueUsd: 0,
       explanation: `Nansen returned no Smart Money flow data for "${token}"${
         chain ? ` on ${chain}` : ""
       }. This can mean the token symbol wasn't recognized, or Smart Money wallets show no recent activity on it.`,
@@ -295,6 +309,27 @@ export function buildVerification(opts: {
     .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0))
     .slice(0, 5);
 
+  const whaleTraders: ActiveTrader[] = (whoBoughtSold || [])
+    .map((w) => ({
+      address: w.address,
+      label: w.address_label || "Unlabeled wallet",
+      chain: chain || "",
+      valueUsd:
+        claimType === "ACCUMULATION"
+          ? w.bought_volume_usd ?? null
+          : w.sold_volume_usd ?? null,
+      timestamp: "",
+      txHash: "",
+    }))
+    .filter((w) => (w.valueUsd ?? 0) > 0)
+    .sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0))
+    .slice(0, 5);
+
+  const totalTradeValueUsd = activeTraders.reduce(
+    (sum, t) => sum + (t.valueUsd ?? 0),
+    0
+  );
+
   return {
     claim: claimRaw,
     token,
@@ -307,5 +342,7 @@ export function buildVerification(opts: {
     contradictingSignals: contradictingCount,
     checkedAt: new Date().toISOString(),
     activeTraders,
+    whaleTraders,
+    totalTradeValueUsd,
   };
 }

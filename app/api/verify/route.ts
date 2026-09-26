@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseClaim } from "@/lib/claimParser";
-import { getSmartMoneyNetflow, getSmartMoneyDexTrades, NansenApiError } from "@/lib/nansen";
+import { getSmartMoneyNetflow, getSmartMoneyDexTrades, getWhoBoughtSold, NansenApiError } from "@/lib/nansen";
 import { resolveToken } from "@/lib/tokenResolver";
 import { buildVerification } from "@/lib/evidenceEngine";
 
@@ -142,6 +142,17 @@ export async function POST(req: NextRequest) {
       console.error("[verify] dex-trades fetch failed (non-fatal):", tradeErr);
     }
 
+    let whoBoughtSold: Awaited<ReturnType<typeof getWhoBoughtSold>> = [];
+    try {
+      whoBoughtSold = await getWhoBoughtSold({
+        chain: resolved.chain,
+        tokenAddress: resolved.address,
+        buyOrSell: parsed.claimType === "ACCUMULATION" ? "BUY" : "SELL",
+      });
+    } catch (wbsErr) {
+      console.error("[verify] who-bought-sold fetch failed (non-fatal):", wbsErr);
+    }
+
     const result = buildVerification({
       claimRaw: claim,
       claimType: parsed.claimType,
@@ -149,6 +160,7 @@ export async function POST(req: NextRequest) {
       chain: resolved.chain,
       record: match,
       trades,
+      whoBoughtSold,
     });
 
     return NextResponse.json(result);

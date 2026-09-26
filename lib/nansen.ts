@@ -140,3 +140,65 @@ export async function getSmartMoneyDexTrades(params: {
   const json = (await res.json()) as DexTradesResponse;
   return json.data || [];
 }
+
+export type TGMWhoBoughtSold = {
+  address: string;
+  address_label?: string;
+  bought_volume_usd?: number;
+  sold_volume_usd?: number;
+  trade_volume_usd?: number;
+};
+
+type WhoBoughtSoldResponse = {
+  data: TGMWhoBoughtSold[];
+  pagination: { page: number; per_page: number; is_last_page: boolean };
+};
+
+export async function getWhoBoughtSold(params: {
+  chain: string;
+  tokenAddress: string;
+  buyOrSell: "BUY" | "SELL";
+}): Promise<TGMWhoBoughtSold[]> {
+  const apiKey = process.env.NANSEN_API_KEY;
+  if (!apiKey) {
+    throw new NansenApiError(
+      "Missing NANSEN_API_KEY. Add it to your .env.local file.",
+      500,
+      "missing_api_key"
+    );
+  }
+
+  const now = new Date();
+  const from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  const body = {
+    chain: params.chain,
+    token_address: params.tokenAddress,
+    buy_or_sell: params.buyOrSell,
+    date: { from: from.toISOString(), to: now.toISOString() },
+    pagination: { page: 1, per_page: 5 },
+    order_by: [
+      {
+        field: params.buyOrSell === "BUY" ? "bought_volume_usd" : "sold_volume_usd",
+        direction: "DESC",
+      },
+    ],
+  };
+
+  const res = await fetch(`${NANSEN_BASE_URL}/api/v1/tgm/who-bought-sold`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: apiKey,
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    return [];
+  }
+
+  const json = (await res.json()) as WhoBoughtSoldResponse;
+  return json.data || [];
+}

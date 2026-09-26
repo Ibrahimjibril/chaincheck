@@ -38,6 +38,8 @@ type VerificationResult = {
   contradictingSignals: number;
   checkedAt: string;
   activeTraders: ActiveTrader[];
+  whaleTraders: ActiveTrader[];
+  totalTradeValueUsd: number;
 };
 
 const EXPLORER_BASE: Record<string, string> = {
@@ -54,6 +56,28 @@ const EXPLORER_BASE: Record<string, string> = {
 function explorerUrl(chain: string, address: string): string | null {
   const base = EXPLORER_BASE[chain];
   return base ? `${base}${address}` : null;
+}
+
+const TX_EXPLORER_BASE: Record<string, string> = {
+  ethereum: "https://etherscan.io/tx/",
+  base: "https://basescan.org/tx/",
+  arbitrum: "https://arbiscan.io/tx/",
+  polygon: "https://polygonscan.com/tx/",
+  avalanche: "https://snowtrace.io/tx/",
+  bnb: "https://bscscan.com/tx/",
+  optimism: "https://optimistic.etherscan.io/tx/",
+  solana: "https://solscan.io/tx/",
+};
+
+function txExplorerUrl(chain: string, txHash: string): string | null {
+  const base = TX_EXPLORER_BASE[chain];
+  return base && txHash ? `${base}${txHash}` : null;
+}
+
+function copyText(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(() => {});
+  }
 }
 
 function truncateAddress(addr: string): string {
@@ -154,6 +178,84 @@ function Row({
       <span className={`text-right ${valueClassName || "text-white"}`}>
         {value}
       </span>
+    </div>
+  );
+}
+
+function WalletCard({
+  title,
+  subtitle,
+  wallets,
+}: {
+  title: string;
+  subtitle: string;
+  wallets: ActiveTrader[];
+}) {
+  if (wallets.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-border bg-panel/60 p-6">
+      <div className="mb-1 text-xs font-mono uppercase tracking-wider text-gray-500">
+        {title} ({wallets.length})
+      </div>
+      <div className="mb-4 text-[11px] text-gray-600">{subtitle}</div>
+      <div className="space-y-2">
+        {wallets.map((t, i) => {
+          const addrUrl = explorerUrl(t.chain, t.address);
+          const txUrl = txExplorerUrl(t.chain, t.txHash);
+          return (
+            <div
+              key={i}
+              className="rounded-xl border border-border bg-black/30 px-4 py-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-mono text-sm text-white">
+                    {truncateAddress(t.address)}
+                  </div>
+                  <div className="truncate text-[11px] text-gray-500">
+                    {t.label}
+                  </div>
+                </div>
+                <div className="font-mono text-sm text-accent">
+                  {t.valueUsd != null
+                    ? `$${t.valueUsd.toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}`
+                    : "\u2014"}
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
+                <button
+                  onClick={() => copyText(t.address)}
+                  className="text-gray-500 underline decoration-dotted hover:text-accent"
+                >
+                  Copy address
+                </button>
+                {addrUrl && (
+                  <a
+                    href={addrUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-500 underline decoration-dotted hover:text-accent"
+                  >
+                    View wallet
+                  </a>
+                )}
+                {txUrl && (
+                  <a
+                    href={txUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-500 underline decoration-dotted hover:text-accent"
+                  >
+                    View transaction
+                  </a>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -488,61 +590,65 @@ export default function Home() {
               </div>
             </div>
 
-            {result.activeTraders.length > 0 && (
-              <div className="rounded-2xl border border-border bg-panel/60 p-6">
-                <div className="mb-1 text-xs font-mono uppercase tracking-wider text-gray-500">
-                  Active Smart Money Wallets ({result.activeTraders.length})
+            <div className="rounded-2xl border border-border bg-panel/60 p-6">
+              <div className="mb-4 text-xs font-mono uppercase tracking-wider text-gray-500">
+                Evidence Breakdown
+              </div>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-600">
+                    Supporting
+                  </div>
+                  <div className="font-mono text-xl text-accent">
+                    {result.supportingSignals}
+                  </div>
                 </div>
-                <div className="mb-4 text-[11px] text-gray-600">
-                  Real wallet addresses from Nansen&apos;s DEX trade data —
-                  tap to verify on-chain yourself.
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-600">
+                    Contradicting
+                  </div>
+                  <div className="font-mono text-xl text-danger">
+                    {result.contradictingSignals}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {result.activeTraders.map((t, i) => {
-                    const url = explorerUrl(t.chain, t.address);
-                    const row = (
-                      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-black/30 px-4 py-3">
-                        <div className="min-w-0">
-                          <div className="font-mono text-sm text-white">
-                            {truncateAddress(t.address)}
-                          </div>
-                          <div className="truncate text-[11px] text-gray-500">
-                            {t.label}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-mono text-sm text-accent">
-                            {t.valueUsd != null
-                              ? `$${t.valueUsd.toLocaleString(undefined, {
-                                  maximumFractionDigits: 0,
-                                })}`
-                              : "\u2014"}
-                          </div>
-                          {url && (
-                            <div className="text-[10px] text-gray-500">
-                              View on explorer →
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                    return url ? (
-                      <a
-                        key={i}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block transition hover:opacity-80"
-                      >
-                        {row}
-                      </a>
-                    ) : (
-                      <div key={i}>{row}</div>
-                    );
-                  })}
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-600">
+                    Relevant wallets
+                  </div>
+                  <div className="font-mono text-xl text-white">
+                    {result.activeTraders.length + result.whaleTraders.length}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-600">
+                    Trade value
+                  </div>
+                  <div className="font-mono text-xl text-white">
+                    {result.totalTradeValueUsd > 0
+                      ? `$${result.totalTradeValueUsd.toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
+                        })}`
+                      : "\u2014"}
+                  </div>
                 </div>
               </div>
-            )}
+              <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-3 text-[11px] text-gray-500">
+                <span>Observation window: Last 24h</span>
+                <span>Data source: Nansen</span>
+              </div>
+            </div>
+
+            <WalletCard
+              title="Active Smart Money Wallets"
+              subtitle="Labeled Smart Money wallets from Nansen's DEX trade data."
+              wallets={result.activeTraders}
+            />
+
+            <WalletCard
+              title="Top Buyers/Sellers · All Wallets"
+              subtitle="Whale-level view: the largest wallets by USD volume in the last 24h, not limited to labeled Smart Money."
+              wallets={result.whaleTraders}
+            />
           </section>
 
           <div className="flex flex-wrap gap-3">
@@ -618,6 +724,20 @@ export default function Home() {
                     Verified Wallets ({result.activeTraders.length})
                   </div>
                   {result.activeTraders.map((t, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-400">{t.label}</span>
+                      <span className="text-white">{truncateAddress(t.address)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {result.whaleTraders.length > 0 && (
+                <div className="mt-5 space-y-2 border-t border-border pt-4">
+                  <div className="mb-2 text-[10px] uppercase tracking-wider text-gray-500">
+                    Top Wallets · All Wallets ({result.whaleTraders.length})
+                  </div>
+                  {result.whaleTraders.map((t, i) => (
                     <div key={i} className="flex items-center justify-between text-xs">
                       <span className="text-gray-400">{t.label}</span>
                       <span className="text-white">{truncateAddress(t.address)}</span>
